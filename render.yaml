@@ -1,0 +1,39 @@
+services:
+  # FastAPI Backend Service
+  - type: web
+    name: job-salary-api
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: MODEL_PATH
+        value: models/model.pkl
+      - key: PYTHONUNBUFFERED
+        value: 1
+    autoDeploy: true
+
+  # Streamlit Frontend Service
+  - type: web
+    name: job-salary-streamlit
+    env: docker
+    dockerfilePath: ./Dockerfile.streamlit
+    dockerContext: .
+    plan: starter
+    region: oregon
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: API_URL
+        sync: false
+        fromService:
+          type: web
+          name: job-salary-api
+          property: host
+      - key: MODEL_PATH
+        value: models/model.pkl
+      - key: PYTHONUNBUFFERED
+        value: 1
+    autoDeploy: true
+

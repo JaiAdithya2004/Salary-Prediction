@@ -1,0 +1,114 @@
+name: ML Model CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - "data/salary_data.csv"
+      - "data/new_data/**"
+      - "src/**"
+      - "app.py"
+      - "automated_pipeline.py"
+      - "Dockerfile"
+      - "Dockerfile.streamlit"
+  workflow_dispatch:
+    inputs:
+      force_retrain:
+        description: 'Force model retraining'
+        required: false
+        default: 'false'
+        type: boolean
+      skip_pipeline:
+        description: 'Skip ML pipeline, only build Docker'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Check for New Data
+      id: check_data
+      run: |
+        if [ -f "data/new_data/latest.csv" ] || [ "${{ github.event.inputs.force_retrain }}" == "true" ]; then
+          echo "retrain=true" >> $GITHUB_OUTPUT
+        else
+          echo "retrain=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Run Automated Pipeline
+      if: steps.check_data.outputs.retrain == 'true' && github.event.inputs.skip_pipeline != 'true'
+      env:
+        SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+        SMTP_PORT: ${{ secrets.SMTP_PORT }}
+        EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+        EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        SEND_TRAINING_EMAIL: "true"
+      run: |
+        echo "🚀 Running automated ML pipeline..."
+        echo "📊 Steps: Drift Detection → Preprocessing → Training → Evaluation → Notification"
+        python automated_pipeline.py
+        echo "✅ Pipeline completed"
+        
+    - name: Skip Pipeline (Manual Override)
+      if: github.event.inputs.skip_pipeline == 'true'
+      run: |
+        echo "⏭️ Skipping ML pipeline (manual override)"
+        echo "📦 Proceeding with Docker build only"
+
+    - name: Build Docker Images
+      if: steps.check_data.outputs.retrain == 'true' || github.event.inputs.skip_pipeline == 'true'
+      run: |
+        echo "🐳 Building Docker images..."
+        
+        # Build FastAPI image
+        echo "📦 Building FastAPI image..."
+        docker build -t job-salary-api:latest -f Dockerfile .
+        echo "✅ FastAPI image built"
+        
+        # Build Streamlit image
+        echo "📦 Building Streamlit image..."
+        docker build -t job-salary-streamlit:latest -f Dockerfile.streamlit .
+        echo "✅ Streamlit image built"
+        
+        echo "✅ All Docker images built successfully"
+
+    - name: Push to Docker Hub
+      if: steps.check_data.outputs.retrain == 'true'
+      env:
+        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      run: |
+        if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+          echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+          docker tag job-salary-api:latest $DOCKERHUB_USERNAME/job-salary-api:latest
+          docker push $DOCKERHUB_USERNAME/job-salary-api:latest
+          echo "✅ Docker image pushed to Docker Hub"
+        else
+          echo "⚠️ Docker Hub credentials not set, skipping push"
+        fi
+
+    - name: Upload Model Artifact
+      if: steps.check_data.outputs.retrain == 'true'
+      uses: actions/upload-artifact@v3
+      with:
+        name: trained-model
+        path: models/model.pkl
+        retention-days: 30
+

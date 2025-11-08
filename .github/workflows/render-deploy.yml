@@ -1,0 +1,32 @@
+name: Deploy to Render
+
+on:
+  workflow_run:
+    workflows: ["ML Model CI/CD Pipeline"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Deploy to Render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          echo "🚀 Triggering Render deployment..."
+          echo "✅ Render will auto-deploy from GitHub"
+          echo "📝 Make sure auto-deploy is enabled in Render dashboard"
+          
+          # Optional: Use Render API to trigger deployment
+          # Uncomment if you have RENDER_API_KEY set
+          # curl -X POST "https://api.render.com/v1/services/YOUR_SERVICE_ID/deploys" \
+          #   -H "Authorization: Bearer $RENDER_API_KEY" \
+          #   -H "Content-Type: application/json"
+
