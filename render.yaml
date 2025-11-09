@@ -26,7 +26,6 @@ services:
     healthCheckPath: /_stcore/health
     envVars:
       - key: API_URL
-        sync: false
         fromService:
           type: web
           name: job-salary-api
