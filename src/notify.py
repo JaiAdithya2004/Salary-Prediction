@@ -126,26 +126,81 @@ def notify_training_failure(error: str) -> bool:
     return notify_email_html(title, body)
 
 
-def notify_drift_detected(drift_report: dict) -> bool:
+def notify_drift_detected(
+    drift_report: dict, 
+    old_data_path: Optional[str] = None,
+    new_data_path: Optional[str] = None,
+    repo_name: Optional[str] = None
+) -> bool:
     """Send alert when data drift is detected."""
     title = "⚠️ Data Drift Detected in New Dataset"
-    drifted = [k for k, v in drift_report.items() if "⚠️" in v]
-    stable = [k for k, v in drift_report.items() if "✅" in v]
+    
+    # Handle both dict format (with 'status' key) and string format
+    drifted = []
+    stable = []
+    for k, v in drift_report.items():
+        if isinstance(v, dict):
+            status = v.get('status', '')
+            if "⚠️" in status or "Drift" in status:
+                drifted.append(k)
+            elif "✅" in status or "Stable" in status:
+                stable.append(k)
+        elif isinstance(v, str):
+            if "⚠️" in v or "Drift" in v:
+                drifted.append(k)
+            elif "✅" in v or "Stable" in v:
+                stable.append(k)
+    
     body = f"""
-    <p>Drift detected in {len(drifted)} feature(s): {', '.join(drifted)}</p>
-    <p>Stable features: {', '.join(stable)}</p>
-    <p>Retraining is recommended.</p>
+    <p><strong>Drift detected in {len(drifted)} feature(s):</strong> {', '.join(drifted) if drifted else 'None'}</p>
+    <p><strong>Stable features ({len(stable)}):</strong> {', '.join(stable) if stable else 'None'}</p>
     """
+    
+    if old_data_path:
+        body += f"<p><strong>Reference data:</strong> {old_data_path}</p>"
+    if new_data_path:
+        body += f"<p><strong>New data:</strong> {new_data_path}</p>"
+    
+    body += "<p><strong>Action:</strong> Model retraining is recommended.</p>"
+    
     return notify_email_html(title, body)
 
 
-def notify_no_drift(drift_report: dict) -> bool:
+def notify_no_drift(
+    drift_report: dict,
+    new_data_path: Optional[str] = None,
+    repo_name: Optional[str] = None
+) -> bool:
     """Send info email if no drift found."""
     title = "✅ No Data Drift Detected"
+    
+    # Count stable features
+    stable_count = 0
+    feature_names = []
+    for k, v in drift_report.items():
+        if isinstance(v, dict):
+            status = v.get('status', '')
+            if "✅" in status or "Stable" in status:
+                stable_count += 1
+                feature_names.append(k)
+        elif isinstance(v, str):
+            if "✅" in v or "Stable" in v:
+                stable_count += 1
+                feature_names.append(k)
+        else:
+            stable_count += 1
+            feature_names.append(k)
+    
     body = f"""
     <p>No drift detected in the latest dataset. All features remain stable.</p>
-    <p>Checked {len(drift_report)} features.</p>
+    <p><strong>Checked {len(drift_report)} feature(s):</strong> {', '.join(feature_names[:10])}{'...' if len(feature_names) > 10 else ''}</p>
     """
+    
+    if new_data_path:
+        body += f"<p><strong>Data file:</strong> {new_data_path}</p>"
+    
+    body += "<p>The model continues to perform well with the current data distribution.</p>"
+    
     return notify_email_html(title, body)
 
 

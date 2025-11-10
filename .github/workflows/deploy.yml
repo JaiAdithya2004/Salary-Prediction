@@ -60,6 +60,7 @@ jobs:
         EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         EMAIL_TO: ${{ secrets.EMAIL_TO }}
         SEND_TRAINING_EMAIL: "true"
+        NOTIFY_ON_NO_DRIFT: "true"
       run: |
         echo "🚀 Running automated ML pipeline..."
         echo "📊 Steps: Drift Detection → Preprocessing → Training → Evaluation → Notification"

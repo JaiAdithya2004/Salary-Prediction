@@ -120,8 +120,9 @@ def detect_data_drift(
                 else:
                     print("⚠️ Failed to send drift alert email. Check email configuration.")
             else:
-                # Optionally send notification even when no drift (can be configured)
-                notify_on_no_drift = os.getenv("NOTIFY_ON_NO_DRIFT", "false").lower() == "true"
+                # Send notification when no drift is detected (default: enabled)
+                # Can be disabled by setting NOTIFY_ON_NO_DRIFT=false
+                notify_on_no_drift = os.getenv("NOTIFY_ON_NO_DRIFT", "true").lower() == "true"
                 if notify_on_no_drift:
                     success = notify_no_drift(
                         drift_report=drift_report,
@@ -132,6 +133,8 @@ def detect_data_drift(
                         print("✅ No-drift notification sent successfully!")
                     else:
                         print("⚠️ Failed to send no-drift notification.")
+                else:
+                    print("ℹ️  No-drift notification disabled (NOTIFY_ON_NO_DRIFT=false)")
         except ImportError:
             print("⚠️ Email notification module not available. Install python-dotenv if needed.")
         except Exception as e:
